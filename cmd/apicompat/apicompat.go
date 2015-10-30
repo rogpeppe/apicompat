@@ -26,14 +26,14 @@ func main() {
 	for _, t0 := range info0.Types {
 		t1, ok := info1.Types[t0.Name]
 		if !ok {
-			fmt.Printf("type %s has gone away", t0.Name)
+			fmt.Printf("type %s has gone away\n", t0.Name)
 			continue
 		}
 		err := apicompat.Check(info0, info1, t0, t1, customMarshaler)
 		if err != nil {
 			err := err.(*apicompat.CheckError)
 			for _, err := range err.Errors {
-				fmt.Printf("%s incompatible: %v", t0.Name, err)
+				fmt.Printf("%s incompatible: %v\n", t0.Name, err)
 			}
 		}
 	}
