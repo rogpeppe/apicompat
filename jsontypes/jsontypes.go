@@ -120,12 +120,15 @@ func (info *Info) Deref(t *Type) *Type {
 }
 
 func (info *Info) TypeInfo(t reflect.Type) *Type {
-	name := mkName(t.PkgPath(), t.Name())
+	var name TypeName
+	if t.Name() != "" {
+		name = mkName(t.PkgPath(), t.Name())
+	}
 	inPackage := t.PkgPath() != ""
-	if inPackage {
+	if inPackage && name != "" {
 		if oldt := info.Types[name]; oldt != nil {
 			if oldt.goType != nil && oldt.goType != t {
-				panic(fmt.Errorf("duplicate type name with different types %v", name))
+				panic(fmt.Errorf("duplicate type name with different types %q (%v)", name, t))
 			}
 			return oldt
 		}
@@ -135,35 +138,35 @@ func (info *Info) TypeInfo(t reflect.Type) *Type {
 		Kind:   Kind(t.Kind().String()),
 		goType: t,
 	}
-	if inPackage {
+	if inPackage && name != "" {
 		// Add the type to the info first to prevent infinite recursion.
 		info.Types[name] = jt
 	}
 	info.addMethods(jt, t)
 	switch t.Kind() {
 	case reflect.Array, reflect.Chan, reflect.Ptr, reflect.Slice:
-		jt.Elem = info.typeInfo(t.Elem())
+		jt.Elem = info.Ref(t.Elem())
 	case reflect.Map:
-		jt.Key, jt.Elem = info.typeInfo(t.Key()), info.typeInfo(t.Elem())
+		jt.Key, jt.Elem = info.Ref(t.Key()), info.Ref(t.Elem())
 	case reflect.Struct:
 		info.addFields(jt, t)
 	case reflect.Func:
 		jt.Variadic = t.IsVariadic()
 		jt.In = make([]*Type, t.NumIn())
 		for i := range jt.In {
-			jt.In[i] = info.typeInfo(t.In(i))
+			jt.In[i] = info.Ref(t.In(i))
 		}
 		jt.Out = make([]*Type, t.NumOut())
 		for i := range jt.Out {
-			jt.Out[i] = info.typeInfo(t.Out(i))
+			jt.Out[i] = info.Ref(t.Out(i))
 		}
 	}
 	return jt
 }
 
-// typeInfo is the same as TypeInfo except that it
+// Ref is the same as TypeInfo except that it
 // will return a type reference for named types.
-func (info *Info) typeInfo(t reflect.Type) *Type {
+func (info *Info) Ref(t reflect.Type) *Type {
 	jt := info.TypeInfo(t)
 	if jt.Name.PkgPath() != "" {
 		return &Type{
@@ -190,7 +193,7 @@ func (info *Info) addMethods(jt *Type, t reflect.Type) {
 		}
 		jm := Method{
 			Name: m.Name,
-			Type: info.typeInfo(m.Type),
+			Type: info.Ref(m.Type),
 		}
 		if vt != nil {
 			_, hasValueMethod := vt.MethodByName(m.Name)
@@ -211,7 +214,7 @@ func (info *Info) addFields(jt *Type, t reflect.Type) {
 		}
 		jf := Field{
 			Name:      f.Name,
-			Type:      info.typeInfo(f.Type),
+			Type:      info.Ref(f.Type),
 			Anonymous: f.Anonymous,
 			Tag:       string(f.Tag),
 		}
